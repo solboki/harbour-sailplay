@@ -543,6 +543,11 @@ public:
           m_content(new SailplayContentHost(this)), m_music(new SailplayMusicHost(this))
     {
         m_loggingEnabled = diagnosticLoggingEnabled();
+        // Choosing a track in a music app's browse page returns to the split
+        // dashboard, where the player card shows what was just started.
+        connect(m_content, &SailplayContentHost::itemActivated, this, [this]() {
+            if (contentActive() && isMusicApp(m_currentApp)) openDashboard();
+        });
         connect(this, &CarUiController::currentAppChanged, this, [this]() {
             m_music->setActive(m_musicActive || m_dashboardActive);
             m_content->setActive(contentActive());
@@ -1667,6 +1672,13 @@ private:
         if (!available || !available->sdk.valid) return;
         if (isMusicApp(appId) && !(available && available->sdk.renderer())) {
             ensureMusicBackend(appId);
+            if (available->sdk.contentTemplate() && m_projection) {
+                // A music app that can be browsed opens on its own content.
+                // The player page shows whichever player is active and is
+                // reached from the dashboard music card.
+                openContent(*available);
+                return;
+            }
             moveToFront(appId);
             openMusic();
             emit dockChanged();
