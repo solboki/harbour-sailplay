@@ -183,6 +183,11 @@ def probe(sock, stop, duration, certificate_out=None, accessory_key=None,
             session_data['bluetooth_address'] = local_address
             if bluetooth_device:
                 session_data['bluetooth_device'] = bluetooth_device
+            # Some head units need time between this link and the AirPlay
+            # control connection; see carplay_proto/receiversettle.py.
+            session_data['link_started'] = started
+            session_data['accessory_manufacturer'] = accessory.get(2, '')
+            session_data['accessory_model'] = accessory.get(1, '')
             json.dump(session_data, output)
 
     def start_handover(trigger):
@@ -220,6 +225,7 @@ def probe(sock, stop, duration, certificate_out=None, accessory_key=None,
     authenticated = False
     peer_received_messages = set()
     peer_sent_messages = set()
+    accessory = {}
     wifi_request = WifiRequestWatch()
     wifi_config = None
     navigation = NavigationSubscription()
@@ -367,6 +373,7 @@ def probe(sock, stop, duration, certificate_out=None, accessory_key=None,
                                                 peer_sent_messages = set(ids)
                                     logging.info('accessory identity name=%r model=%r manufacturer=%r',
                                                  identity.get(0, ''), identity.get(1, ''), identity.get(2, ''))
+                                    accessory.update(identity)
                                     logging.info('identification parameter ids=%s',
                                                  [(parameter.id, len(parameter.payload))
                                                   for parameter in frame.parameters()])

@@ -388,6 +388,8 @@ def main():
             (time.monotonic()-session_started)*1000), flush=True)
         print('HU IP state: {}'.format({key:str(props.get(key)) for key in ('IPv4','IPv6','IPv6.Configuration')}), flush=True)
         from carplay_proto.airplaydiscovery import endpoints
+        from carplay_proto.receiversettle import settle
+        settle(session, log=lambda line: print(line, flush=True))
         for address, port in endpoints(session['addresses'], session['port'], props,
                                        log=lambda line: print(line, flush=True)):
             client = None
