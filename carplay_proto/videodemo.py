@@ -330,6 +330,24 @@ def send_iap(client,data):
         print('iAP tunnel send failed: {}: {}'.format(type(error).__name__,error),flush=True)
 
 
+def keep_bluetooth(info,path='/home/defaultuser/.config/sailplay/projection.ini'):
+    """Whether to leave the head unit's Bluetooth link up during projection.
+
+    Honda needs it for iAP2. EXPERIMENT: `[CarPlay] keepBluetooth=true` keeps
+    it for any head unit, to find out whether one that refuses HFP after the
+    handoff accepts call audio when the handoff is never requested.
+    """
+    if 'honda' in str(info.get('model','')).lower():
+        return True
+    import configparser
+    settings=configparser.ConfigParser()
+    try:
+        settings.read(path)
+        return settings.getboolean('CarPlay','keepBluetooth',fallback=False)
+    except (OSError,ValueError,configparser.Error):
+        return False
+
+
 def disable_bluetooth(client,address):
     """Ask the authenticated receiver to hand off BT; leave the adapter powered."""
     import re
@@ -497,7 +515,7 @@ def run_demo(client,address,interface,shared,setup_info,info,path=None,seconds=1
         if live:
             from .audio import AudioSender
             audio=AudioSender(client,shared,info)
-            if bluetooth_address and 'honda' not in str(info.get('model','')).lower():
+            if bluetooth_address and not keep_bluetooth(info):
                 phase = 'bluetooth-handoff'
                 before = time.monotonic()
                 checkpoint(phase + '-start')
