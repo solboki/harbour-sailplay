@@ -122,7 +122,7 @@ Rectangle {
                     anchors.centerIn: parent; spacing: 18
                     Image {
                         width: 64; height: 64; anchors.verticalCenter: parent.verticalCenter
-                        source: "image://theme/icon-m-media-playlists?"
+                        source: "image://theme/icon-m-events?"
                             + (browseTouch.pressed ? palette.overlayBackgroundColor : palette.primaryColor)
                     }
                     Text {
