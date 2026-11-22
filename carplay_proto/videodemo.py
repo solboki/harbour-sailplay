@@ -330,6 +330,17 @@ def send_iap(client,data):
         print('iAP tunnel send failed: {}: {}'.format(type(error).__name__,error),flush=True)
 
 
+def carplay_flag(name,path='/home/defaultuser/.config/sailplay/projection.ini'):
+    """A boolean `[CarPlay]` setting; False when missing or malformed."""
+    import configparser
+    settings=configparser.ConfigParser()
+    try:
+        settings.read(path)
+        return settings.getboolean('CarPlay',name,fallback=False)
+    except (OSError,ValueError,configparser.Error):
+        return False
+
+
 def keep_bluetooth(info,path='/home/defaultuser/.config/sailplay/projection.ini'):
     """Whether to leave the head unit's Bluetooth link up during projection.
 
@@ -337,15 +348,32 @@ def keep_bluetooth(info,path='/home/defaultuser/.config/sailplay/projection.ini'
     it for any head unit, to find out whether one that refuses HFP after the
     handoff accepts call audio when the handoff is never requested.
     """
-    if 'honda' in str(info.get('model','')).lower():
-        return True
-    import configparser
-    settings=configparser.ConfigParser()
+    return 'honda' in str(info.get('model','')).lower() or carplay_flag('keepBluetooth',path)
+
+
+def drop_bluetooth_link(device):
+    """EXPERIMENT (`[CarPlay] dropBluetoothAtHandoff=true`): end the link ourselves.
+
+    The Fiat/Marelli CARLINE_13 restarts iAP2 inside AirPlay 0.4 to 0.8 s
+    after the handoff. In every session it never displayed, its Bluetooth
+    iAP2 link was still up 0.6 to 3.2 s after that; in those it displayed,
+    the link had gone or went within 0.2 s. Disconnecting from the phone as
+    soon as the handoff is acknowledged removes that race.
+    """
+    started=time.monotonic()
     try:
-        settings.read(path)
-        return settings.getboolean('CarPlay','keepBluetooth',fallback=False)
-    except (OSError,ValueError,configparser.Error):
-        return False
+        import dbus
+        bus=dbus.SystemBus(private=True)
+        try:
+            dbus.Interface(bus.get_object('org.bluez',device,introspect=False),
+                           'org.bluez.Device1').Disconnect(timeout=3)
+        finally:
+            bus.close()
+        print('Bluetooth link dropped by the phone at handoff device={} elapsedMs={:.1f}'.format(
+            device,(time.monotonic()-started)*1000),flush=True)
+    except Exception as error:
+        print('Bluetooth link drop at handoff failed device={} error={}'.format(
+            device,getattr(error,'get_dbus_name',lambda:type(error).__name__)()),flush=True)
 
 
 def disable_bluetooth(client,address):
@@ -520,6 +548,8 @@ def run_demo(client,address,interface,shared,setup_info,info,path=None,seconds=1
                 before = time.monotonic()
                 checkpoint(phase + '-start')
                 disable_bluetooth(client,bluetooth_address)
+                if bluetooth_device and carplay_flag('dropBluetoothAtHandoff'):
+                    drop_bluetooth_link(bluetooth_device)
                 checkpoint(phase + '-complete', before)
             elif bluetooth_address:
                 # The HU needs its Bluetooth link for iAP2 call/media control.
