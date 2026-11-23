@@ -68,7 +68,8 @@ class VideoDemoTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'stop after starting call routing'):
                 run_demo(client, 'receiver', None, bytes(32), {'eventPort': 1}, info,
                          live=True, bluetooth_device='/org/bluez/hci1/dev_CURRENT_HU')
-        router.assert_called_once_with('/org/bluez/hci1/dev_CURRENT_HU')
+        router.assert_called_once()
+        self.assertEqual(router.call_args.args, ('/org/bluez/hci1/dev_CURRENT_HU',))
         router.return_value.start.assert_called_once()
         router.return_value.close.assert_called_once()
         theme.return_value.start.assert_called_once()
