@@ -16,7 +16,28 @@ import time
 SETTLE_BY_MANUFACTURER = {'marelli': (25, 10)}
 
 
+SETTINGS = '/home/defaultuser/.config/sailplay/projection.ini'
+
+
+def settle_disabled(path=None):
+    """EXPERIMENT: `[CarPlay] skipReceiverSettle=true` connects without holding.
+
+    Since it was paired again, the Scudo drops and reopens its Bluetooth iAP2
+    link every 10 to 15 s until the phone reaches AirPlay, so the 25 s hold
+    always outlasts it; a session that started during such a restart was reset.
+    """
+    import configparser
+    settings = configparser.ConfigParser()
+    try:
+        settings.read(SETTINGS if path is None else path)
+        return settings.getboolean('CarPlay', 'skipReceiverSettle', fallback=False)
+    except (OSError, ValueError, configparser.Error):
+        return False
+
+
 def settle_seconds(session):
+    if settle_disabled():
+        return (0, 0)
     manufacturer = str(session.get('accessory_manufacturer') or '').strip().lower()
     return SETTLE_BY_MANUFACTURER.get(manufacturer, (0, 0))
 
@@ -39,6 +60,8 @@ def remaining(session, clock=time.monotonic, associated=None):
 
 
 def settle(session, log=print, sleep=time.sleep, clock=time.monotonic, associated=None):
+    if settle_disabled() and SETTLE_BY_MANUFACTURER.get(str(session.get('accessory_manufacturer') or '').strip().lower()):
+        log('AirPlay control connection not held: skipReceiverSettle is set')
     wait = remaining(session, clock, associated)
     if wait > 0:
         log('AirPlay control connection held for receiver start-up waitSeconds={:.1f} manufacturer={!r}'.format(

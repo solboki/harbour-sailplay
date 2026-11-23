@@ -1,10 +1,38 @@
+import os
+import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from carplay_proto.receiversettle import remaining, settle, settle_seconds
 
 
 class ReceiverSettleTests(unittest.TestCase):
+    def setUp(self):
+        # Never read the phone's own settings.
+        settings = patch('carplay_proto.receiversettle.SETTINGS', '/nonexistent/projection.ini')
+        settings.start()
+        self.addCleanup(settings.stop)
+
+    def test_experimental_setting_removes_the_hold(self):
+        from carplay_proto import receiversettle
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'projection.ini')
+            for text, expected in (('[CarPlay]\nskipReceiverSettle=true\n', True), ('[CarPlay]\niosVersion=27\n', False),
+                                   ('[CarPlay]\nskipReceiverSettle=maybe\n', False), ('not an ini file', False)):
+                with open(path, 'w') as output:
+                    output.write(text)
+                self.assertEqual(receiversettle.settle_disabled(path), expected)
+            with open(path, 'w') as output:
+                output.write('[CarPlay]\nskipReceiverSettle=true\n')
+            with patch('carplay_proto.receiversettle.SETTINGS', path):
+                log, sleep = Mock(), Mock()
+                session = {'accessory_manufacturer': 'Marelli', 'link_started': 100.0}
+                self.assertEqual(settle(session, log, sleep, clock=lambda: 101.0), 0.0)
+                sleep.assert_not_called()
+                log.assert_called_once_with('AirPlay control connection not held: skipReceiverSettle is set')
+                self.assertEqual(settle({'accessory_manufacturer': 'Honda'}, log, sleep, clock=lambda: 101.0), 0.0)
+                log.assert_called_once()
+
     def session(self, started=100.0, manufacturer='Marelli'):
         return {'link_started': started, 'accessory_manufacturer': manufacturer,
                 'accessory_model': 'Fiat CARLINE_13'}
