@@ -248,6 +248,7 @@ class ScreenFeedback:
         self.screen=screen
         self.resource_changed=resource_changed
         self.audio=audio
+        self.audio_entity=1
         self.duck=duck if duck is not None else [1.0]
         self.mode_lock=mode_lock or threading.RLock()
         self.mode_revision=mode_revision if mode_revision is not None else [0]
@@ -298,6 +299,12 @@ class ScreenFeedback:
                                     entity=next(r['entity'] for r in self.modes['resources'] if r['resourceID']==2)
                                     self.audio.gain=self.duck[0] if entity==1 else 0.0
                                     print('Audio resource reconciled entity={} senderGain={}'.format(entity,self.audio.gain),flush=True)
+                                    returned=entity==1 and self.audio_entity==2
+                                    self.audio_entity=entity
+                                    if returned and carplay_flag('reopenAudioAfterReturn'):
+                                        # EXPERIMENT: see AudioSender.reopen.
+                                        try:self.audio.reopen(self.client,self.client.sock.sock.getpeername())
+                                        except Exception as error:print('Audio reopen failed: {}: {}'.format(type(error).__name__,error),flush=True)
                         if current and self.screen:self.screen.ownership(owner)
                         elif not current and self.resource_changed is not None:self.resource_changed.set()
                     elif changed:
