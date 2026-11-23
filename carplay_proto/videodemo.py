@@ -257,6 +257,7 @@ class ScreenFeedback:
 
     def run(self):
         next_feedback=time.monotonic()+2
+        feedback_count=0
         while not self.stop.wait(0.1):
             try:
                 returning=self.commands and self.commands.return_requested()
@@ -307,6 +308,13 @@ class ScreenFeedback:
                 status,_,body=self.client.request('POST','/feedback',headers={'User-Agent':'AirPlay/566.25.21'})
                 next_feedback=time.monotonic()+2
                 print('Screen feedback status={} bytes={}'.format(status,len(body)),flush=True)
+                # EXPERIMENT: the receiver's reply was discarded so far; it may
+                # tell whether the head unit is consuming the screen stream.
+                feedback_count+=1
+                if body and feedback_count%5==1:
+                    try:detail=repr(plistlib.loads(body))
+                    except Exception:detail='raw:'+bytes(body).hex()
+                    print('Screen feedback detail n={} {}'.format(feedback_count,detail[:600]),flush=True)
             except Exception as error:
                 print('Screen feedback failed: {}: {}'.format(type(error).__name__,error),flush=True)
                 self.stop.set()
