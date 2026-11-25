@@ -5,7 +5,7 @@ import Sailfish.Weather 1.0 as Weather
 Rectangle {
     CarPalette { id: carPalette }
     id: card
-    radius: 22; color: carPalette.card
+    radius: 22; color: carPalette.surface
     property var weather: carController.dashboardWeather
     readonly property bool configured: !!weather && !!weather.city
     readonly property bool populated: configured && weather.populated === true
