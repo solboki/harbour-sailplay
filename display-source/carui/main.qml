@@ -356,6 +356,7 @@ Window {
                 Silica.Slider {
                     id: seekSlider
                     Binding { target: seekSlider; property: "color"; when: carPalette.day; value: "transparent" }
+                    Binding { target: seekSlider; property: "highlightColor"; when: !carPalette.day; value: carPalette.highlightColor }
                     Binding { target: seekSlider; property: "backgroundColor"; when: carPalette.day; value: "transparent" }
                     Binding { target: seekSlider; property: "highlightColor"; when: carPalette.day; value: "transparent" }
                     Binding { target: seekSlider; property: "backgroundGlowColor"; when: carPalette.day; value: "transparent" }
@@ -368,8 +369,8 @@ Window {
                             width: Math.max(0, parent.width - seekSlider.leftMargin - seekSlider.rightMargin)
                             height: 4; radius: 2; color: carPalette.disabled
                             property real progress: Math.max(0, Math.min(1, (seekSlider.value - seekSlider.minimumValue) / Math.max(1, seekSlider.maximumValue - seekSlider.minimumValue)))
-                            Rectangle { width: parent.width * parent.progress; height: parent.height; radius: 2; color: carPalette.text }
-                            Rectangle { x: parent.width * parent.progress - width / 2; y: (parent.height - height) / 2; width: 14; height: 14; radius: 7; color: carPalette.text }
+                            Rectangle { width: parent.width * parent.progress; height: parent.height; radius: 2; color: carPalette.highlightColor }
+                            Rectangle { x: parent.width * parent.progress - width / 2; y: (parent.height - height) / 2; width: 14; height: 14; radius: 7; color: carPalette.highlightColor }
                         }
                     }
                     width: parent.width; height: carController.musicActive ? 72 : 56
@@ -487,7 +488,13 @@ Window {
         Repeater {
             model: root.pageCount
             Rectangle {
-                width: 12; height: 12; radius: 6; color: index === pages.currentIndex ? carPalette.text : carPalette.inactiveDot
+                width: 12; height: 12; radius: 6; color: index === pages.currentIndex ? carPalette.highlightColor : carPalette.inactiveDot
+                Silica.GlassItem {
+                    objectName: "pageGlow_" + index
+                    visible: index === pages.currentIndex
+                    anchors.centerIn: parent; width: 44; height: 44
+                    color: carPalette.highlightColor; falloffRadius: 0.2; radius: 0.2; cache: false
+                }
                 MouseArea { anchors.fill: parent; anchors.margins: -12; onClicked: pages.goToPage(index) }
             }
         }

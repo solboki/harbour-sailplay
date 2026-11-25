@@ -169,6 +169,7 @@ Item {
                               : player.playbackStatus === Mpris.Playing ? player.canPause : !pendingPlay.running && !controls.playRequestPending
                     opacity: enabled ? 1 : 0.35
                     icon.color: carPalette.text
+                    icon.highlightColor: carPalette.highlightColor
                     icon.source: index === 0 ? "image://theme/icon-m-simple-previous"
                                  : index === 2 ? "image://theme/icon-m-simple-next"
                                  : player.playbackStatus === Mpris.Playing ? "image://theme/icon-m-simple-pause"
@@ -259,11 +260,12 @@ Item {
                         x: choiceIcon.visible ? 88 : 20; width: parent.width - x - 72; height: parent.height
                         text: modelData.identity
                         textFormat: Text.PlainText; elide: Text.ElideRight
-                        verticalAlignment: Text.AlignVCenter; color: carPalette.text; font.pixelSize: 30
+                        verticalAlignment: Text.AlignVCenter; font.pixelSize: 30
+                        color: modelData.service === player.currentService ? carPalette.highlightColor : carPalette.text
                     }
                     Silica.Icon {
                         anchors.right: parent.right; anchors.rightMargin: 16; anchors.verticalCenter: parent.verticalCenter
-                        width: 40; height: 40; color: carPalette.text
+                        width: 40; height: 40; color: carPalette.highlightColor
                         source: "image://theme/icon-m-simple-play"
                         visible: modelData.playbackStatus === Mpris.Playing
                     }

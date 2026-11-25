@@ -1,4 +1,5 @@
 import QtQuick 2.0
+import Sailfish.Silica 1.0 as Silica
 
 QtObject {
     property bool day: carController.dayTheme
@@ -10,7 +11,8 @@ QtObject {
     readonly property color secondary: day ? "#50627a" : "#aebcd4"
     readonly property color card: day ? "#f8fbff" : "#263249"
     readonly property color button: day ? "#dce6f2" : "#354460"
-    readonly property color pressed: day ? "#b7cee9" : "#526795"
+    // The pressed state carries the ambience accent, as Silica controls do.
+    readonly property color pressed: Qt.tint(button, Qt.rgba(highlightColor.r, highlightColor.g, highlightColor.b, 0.35))
     readonly property color dock: day ? "#edf3f9" : "#dd090c14"
     readonly property color disabled: day ? "#9aabc0" : "#596071"
     readonly property color gradientTop: day ? "#e3edf8" : "#263657"
@@ -23,13 +25,17 @@ QtObject {
     readonly property color notice: day ? "#f5faff" : "#ed111a2c"
 
     // Ambience roles. Each carries the name of the Silica Theme colour it
-    // stands for, and pages written against them use nothing else from this
-    // palette. Following the phone ambience later means rebinding these seven
-    // lines to Theme.primaryColor and its siblings, not touching the pages.
+    // stands for. The two accents follow the phone ambience, adapted to the
+    // car's own day or night scheme, which may differ from the phone's. The
+    // surfaces stay with the day and night themes above so that text keeps
+    // its contrast whatever the ambience.
+    readonly property int scheme: day ? Silica.Theme.DarkOnLight : Silica.Theme.LightOnDark
     readonly property color primaryColor: text
     readonly property color secondaryColor: secondary
-    readonly property color highlightColor: day ? "#1f5f9e" : "#9fd0ff"
-    readonly property color secondaryHighlightColor: day ? "#4a7bb0" : "#86b4dc"
+    readonly property color highlightColor: Silica.Theme.highlightFromColor(Silica.Theme.highlightColor, scheme)
+    // Silica's own secondary highlight is too pale for the day surfaces, so
+    // the accent is drawn towards the secondary text colour instead.
+    readonly property color secondaryHighlightColor: Qt.tint(highlightColor, Qt.rgba(secondary.r, secondary.g, secondary.b, 0.4))
     readonly property color highlightBackgroundColor: button
     readonly property color highlightDimmerColor: background
     readonly property color overlayBackgroundColor: card
