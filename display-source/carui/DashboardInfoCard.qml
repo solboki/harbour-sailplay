@@ -7,7 +7,7 @@ Rectangle {
     property var palette
     readonly property var guidance: provider ? provider.guidance : ({})
     readonly property bool navigating: !!provider && provider.ready && guidance.state === "active"
-    radius: 22; color: palette.card
+    radius: 22; color: palette.surface
     clip: true
 
     WeatherCard {
