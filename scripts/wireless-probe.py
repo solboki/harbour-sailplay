@@ -119,6 +119,15 @@ def parse_hid_message(frame):
     return kind, struct.unpack('>H', values[0])[0], bytes(data)
 
 
+def stray_hid_frames(payload):
+    """Return the frames of a packet when it holds nothing but HID messages."""
+    try:
+        frames = list(Framer().offer(payload))
+    except ValueError:
+        return []
+    return frames if frames and all(frame.message_id in HID_MESSAGES for frame in frames) else []
+
+
 class UnsupportedAccessory(Exception):
     """The identified iAP2 accessory is not a wireless CarPlay head unit."""
 
@@ -236,6 +245,18 @@ def probe(sock, stop, duration, certificate_out=None, accessory_key=None,
                      trigger, handover_command[1], (time.monotonic() - started) * 1000)
 
     decoder, csm = Decoder(), Framer()
+
+    def deliver_hid(frame):
+        try:
+            kind, component, data = parse_hid_message(frame)
+        except ValueError as error:
+            logging.warning('invalid HID message=0x%04x: %s', frame.message_id, error)
+            return
+        if on_hid:
+            try:
+                on_hid(kind, component, data)
+            except Exception as error:
+                logging.warning('HID %s component=%d not handled: %s', kind, component, type(error).__name__)
     deadline = time.monotonic() + duration if duration else float('inf')
     sync_at = 0
     peer_syn = False
@@ -553,17 +574,7 @@ def probe(sock, stop, duration, certificate_out=None, accessory_key=None,
                                     if not authenticated:
                                         logging.warning('ignoring HID message before authentication')
                                         continue
-                                    try:
-                                        kind, component, data = parse_hid_message(frame)
-                                    except ValueError as error:
-                                        logging.warning('invalid HID message=0x%04x: %s', frame.message_id, error)
-                                        continue
-                                    if on_hid:
-                                        try:
-                                            on_hid(kind, component, data)
-                                        except Exception as error:
-                                            logging.warning('HID %s component=%d not handled: %s',
-                                                            kind, component, type(error).__name__)
+                                    deliver_hid(frame)
                                 elif frame.message_id == 0x4e01:
                                     logging.info('Bluetooth component information body=%s', payload_hex(frame.body))
                                 elif frame.message_id == 0x4e03:
@@ -612,6 +623,20 @@ def probe(sock, stop, duration, certificate_out=None, accessory_key=None,
                                         write_session(start)
                                         start_handover('StartSession')
                     elif packet.sequence != last_rx:
+                        stray = (stray_hid_frames(packet.payload)
+                                 if transport == 'airplay' and authenticated and packet.session == session else [])
+                        if stray:
+                            # After it starts a new link, a Fiat head unit keeps
+                            # numbering its key reports from the link it replaced.
+                            # Act on them and acknowledge them in their own
+                            # numbering, or the keys stay dead until reconnection.
+                            logging.info('HID message outside the link window seq=%d expected=%d; '
+                                         'acknowledged in its own numbering',
+                                         packet.sequence, (last_rx + 1) & 255)
+                            for frame in stray:
+                                deliver_hid(frame)
+                            sock.sendall(encode(Packet(ACK, packet.acknowledgement, packet.sequence, 0, None)))
+                            continue
                         # A stale window means this RFCOMM link is poisoned;
                         # exit and let the advertiser relaunch a clean probe.
                         raise ValueError('out-of-order packet; restarting probe')

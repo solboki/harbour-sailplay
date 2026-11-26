@@ -154,5 +154,12 @@ to the same `MediaKeys` decoder and `media-control.py` actions as AirPlay HID
 reports. `StopHID` (0x6803) forgets the component. Descriptors without media
 keys are ignored.
 
+After a voice-key press that head unit starts a new iAP2 link, yet goes on
+numbering its key reports from the link it replaced (sequence 34 on a link
+expecting 129). Such a report used to end the link as out of order and the
+keys stayed dead. A packet outside the window that holds only HID messages is
+now acted on and acknowledged in its own numbering; any other packet outside
+the window still ends the link.
+
 `tests/test_wireless_probe_unittest.py` and `tests/test_media_control_unittest.py`
 replay the descriptor and reports captured from that head unit.
