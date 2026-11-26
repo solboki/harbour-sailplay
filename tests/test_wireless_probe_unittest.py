@@ -238,13 +238,41 @@ class HidComponentTests(unittest.TestCase):
                 for frame in (start, Frame(0x6803, bytes.fromhex('000600001238')), Frame(0x6802, b'\x00'), report):
                     send(frame)
                 self.assertTrue(delivered.wait(2))
+                # A key report numbered from a link the head unit replaced is
+                # acted on and acknowledged in its own numbering (captured
+                # from a Fiat Scudo: seq 34 on a link expecting 129).
+                queue.clear()
+                car.settimeout(0.3)
+                try:
+                    while True:
+                        decoder.feed(car.recv(4096))
+                except socket.timeout:
+                    pass
+                car.settimeout(2)
+                previous = Frame(0x6802, bytes.fromhex('0006000012380008000108000000'))
+                car.sendall(encode(Packet(ACK, 0x90, 0x0c, 10, previous.encoded())))
+                answer = receive()
+                self.assertEqual((answer.control, answer.sequence, answer.acknowledgement, answer.payload),
+                                 (ACK, 0x0c, 0x90, None))
+                self.assertEqual(seen[-1], ('report', 0x1238, bytes.fromhex('08000000')))
+                # The link itself keeps its own window.
+                send(report)
+                answer = receive()
+                self.assertEqual(answer.acknowledgement, sent[0])
+                self.assertEqual(len(seen), 5)
+                self.assertTrue(worker.is_alive())
+                # Anything else outside the window still ends the link.
+                car.sendall(encode(Packet(ACK, 0x70, 0x0c, 10, Frame(0x4e01, b'').encoded())))
+                worker.join(2)
+                self.assertFalse(worker.is_alive())
             finally:
                 stop.set()
                 worker.join(2)
                 car.close()
-        self.assertEqual([(kind, component) for kind, component, data in seen],
+        self.assertEqual([(kind, component) for kind, component, data in seen[:3]],
                          [('start', 0x1238), ('stop', 0x1238), ('report', 0x1238)])
         self.assertEqual(seen[2][2], bytes.fromhex('04000000'))
+        self.assertEqual(module.stray_hid_frames(b'\x40'), [])
         self.assertFalse(worker.is_alive())
 
 
