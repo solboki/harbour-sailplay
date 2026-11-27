@@ -25,6 +25,56 @@ CONNECTED = ('ready', 'online')
 RETRY_SECONDS = 10
 
 
+def lead_with_mobile_data(manager, service, old, target, log=print, wait=8,
+                          clock=time.monotonic, sleep=time.sleep):
+    """Leave another Wi-Fi before joining the head unit's, so mobile data leads.
+
+    ConnMan gives the default route and DNS to the first connected service.
+    Mobile data is first when it was the phone's connection before the
+    handover: it stays "online" while the head unit's Wi-Fi only reaches
+    "ready". Going straight from another Wi-Fi (at home, say) to the head
+    unit's leaves Wi-Fi first instead: mobile data is connected but unused,
+    names do not resolve, and streaming players stay silent for the whole
+    projection. Disconnect that Wi-Fi and give mobile data a moment to take
+    over. The projection network plan reconnects the Wi-Fi afterwards.
+
+    Returns True when mobile data leads, False when nothing was done or it
+    did not come up in time; the handover goes on either way.
+    """
+    def services():
+        return {str(path): properties for path, properties in manager.GetServices()}
+
+    def cellular(known):
+        return [properties for properties in known.values()
+                if str(properties.get('Type')) == 'cellular' and properties.get('AutoConnect')]
+
+    known = services()
+    if (not old or old == target or old not in known
+            or str(known[old].get('Type')) != 'wifi' or str(known[old].get('State')) not in CONNECTED):
+        return False
+    if not cellular(known):
+        return False
+    if any(str(properties.get('State')) == 'online' for properties in cellular(known)):
+        return True
+    started = clock()
+    try:
+        service(old).Disconnect()
+    except Exception as error:
+        name = getattr(error, 'get_dbus_name', lambda: type(error).__name__)()
+        log('Mobile data lead: previous Wi-Fi not released error={}'.format(name))
+        return False
+    state = None
+    while clock() - started < wait:
+        states = [str(properties.get('State')) for properties in cellular(services())]
+        state = states[0] if states else None
+        if 'online' in states:
+            log('Mobile data leads before the head unit Wi-Fi elapsedMs={:.0f}'.format((clock() - started) * 1000))
+            return True
+        sleep(0.25)
+    log('Mobile data did not take over within {} s state={}; joining the head unit Wi-Fi anyway'.format(wait, state))
+    return False
+
+
 class MobileDataKeeper:
     def __init__(self, log=print):
         self.log = log

@@ -365,6 +365,12 @@ def main():
     if not already_connected:
         subprocess.run(restore_command, check=True,
                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # The restoration above is armed: it brings the previous Wi-Fi back.
+        from carplay_proto.mobiledata import lead_with_mobile_data
+        try:
+            lead_with_mobile_data(manager, service, old, target, log=lambda message: print(message, flush=True))
+        except Exception as error:
+            print('Mobile data lead check failed: ' + type(error).__name__, flush=True)
     if args.trace_supplicant and not already_connected:
         if debug_properties.Get('fi.w1.wpa_supplicant1', 'DebugShowKeys'):
             raise RuntimeError('refusing diagnostic trace with secret-key logging enabled')
