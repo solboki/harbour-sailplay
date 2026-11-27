@@ -199,6 +199,11 @@ def probe(sock, stop, duration, certificate_out=None, accessory_key=None,
         command = list(handover_command)
         command[1] = '--unit=sailplay-handover-{}-{}'.format(os.getpid(), time.monotonic_ns())
         logging.info('Authenticated Bluetooth remains connected; retrying retired Wi-Fi/AirPlay handover')
+        # EXPERIMENT: a head unit that woke from standby with the Bluetooth
+        # link still up may wait for this request before it listens again.
+        if transport != 'airplay' and authenticated and peer_supports_wifi_configuration_request(peer_received_messages):
+            outgoing.append(request_wifi_configuration())
+            logging.info('Wi-Fi configuration requested again before the handover retry')
         try:
             subprocess.run(command, check=True, timeout=10)
         except (subprocess.SubprocessError, OSError):
