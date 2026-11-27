@@ -95,3 +95,80 @@ class MobileDataTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LeadWithMobileDataTests(unittest.TestCase):
+    HOME = '/net/connman/service/wifi_home'
+    CAR = '/net/connman/service/wifi_car'
+    CELL = '/net/connman/service/cellular_1'
+
+    def scene(self, cellular='ready', home='online', after='online', autoconnect=True, rejoin=False):
+        from carplay_proto.mobiledata import lead_with_mobile_data
+        test = self
+        state = {'cellular': cellular, 'home': home, 'now': 0.0}
+        calls = []
+
+        class Manager:
+            def GetServices(self):
+                return [(test.HOME, {'Type': 'wifi', 'State': state['home']}),
+                        (test.CELL, {'Type': 'cellular', 'State': state['cellular'], 'AutoConnect': autoconnect}),
+                        (test.CAR, {'Type': 'wifi', 'State': 'idle'})]
+
+        class Service:
+            def __init__(self, path):
+                self.path = path
+
+            def Disconnect(self):
+                calls.append(self.path)
+                state['home'] = 'idle'
+                state['after'] = state['now'] + 2
+
+        def sleep(seconds):
+            state['now'] += seconds
+            if rejoin and state['now'] >= state.get('after', 1e9) - 1:
+                state['home'] = 'ready'
+            elif after and state['now'] >= state.get('after', 1e9):
+                state['cellular'] = after
+
+        log = []
+        result = lead_with_mobile_data(Manager(), Service, self.HOME, self.CAR, log=log.append,
+                                       clock=lambda: state['now'], sleep=sleep)
+        return result, calls, log
+
+    def test_other_wifi_is_left_until_mobile_data_is_online(self):
+        result, calls, log = self.scene()
+        self.assertTrue(result)
+        self.assertEqual(calls, [self.HOME])
+        self.assertIn('Mobile data leads', log[0])
+
+    def test_wait_ends_when_the_other_wifi_reconnects_on_its_own(self):
+        result, calls, log = self.scene(rejoin=True)
+        self.assertFalse(result)
+        self.assertEqual(calls, [self.HOME])
+        self.assertIn('another Wi-Fi reconnected elapsedMs=1000', log[0])
+
+    def test_idle_mobile_data_is_given_time_to_connect(self):
+        result, calls, _ = self.scene(cellular='idle')
+        self.assertTrue(result)
+        self.assertEqual(calls, [self.HOME])
+
+    def test_mobile_data_already_leading_keeps_the_wifi(self):
+        result, calls, log = self.scene(cellular='online', home='ready')
+        self.assertTrue(result)
+        self.assertEqual((calls, log), ([], []))
+
+    def test_mobile_data_switched_off_keeps_the_wifi(self):
+        result, calls, _ = self.scene(autoconnect=False)
+        self.assertFalse(result)
+        self.assertEqual(calls, [])
+
+    def test_no_connected_wifi_changes_nothing(self):
+        result, calls, _ = self.scene(home='idle')
+        self.assertFalse(result)
+        self.assertEqual(calls, [])
+
+    def test_handover_goes_on_when_mobile_data_stays_down(self):
+        result, calls, log = self.scene(cellular='idle', after=None)
+        self.assertFalse(result)
+        self.assertEqual(calls, [self.HOME])
+        self.assertIn('joining the head unit Wi-Fi anyway', log[0])
