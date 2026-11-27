@@ -192,3 +192,44 @@ class UiCommandTests(unittest.TestCase):
             self.assertEqual(audio.gain,0)
             self.assertTrue(all(r['entity']==2 for r in modes['resources']))
         finally:feedback.close()
+
+
+class TurnByTurnStateTests(unittest.TestCase):
+    def test_guidance_claims_and_releases_the_turn_by_turn_state(self):
+        import plistlib, threading, time
+        from carplay_proto.videodemo import ScreenFeedback, navigation_active
+        sent = []
+
+        class Client:
+            def request(self, method, path, body=None, headers=None):
+                if path == '/command':
+                    sent.append(plistlib.loads(body))
+                return 200, {}, plistlib.dumps({'status': 0}, fmt=plistlib.FMT_BINARY)
+
+        class Feed:
+            state = 'active'
+
+            def poll(self):
+                return {'navigation': {'state': self.state}}
+
+        feed = Feed()
+        modes = {'appStates': [{'appStateID': 1, 'entity': 0, 'speechMode': -1},
+                               {'appStateID': 2, 'entity': 0}, {'appStateID': 3, 'entity': 0}],
+                 'resources': [{'resourceID': r, 'entity': 1, 'permanentEntity': 1} for r in (1, 2)]}
+        feedback = ScreenFeedback(Client(), modes=modes, resource_changed=threading.Event(),
+                                  navigating=navigation_active(feed))
+        try:
+            deadline = time.monotonic() + 3
+            while not sent and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(sent[0]['type'], 'modesChanged')
+            self.assertEqual(sent[0]['params']['appStates'][1], {'appStateID': 2, 'entity': 1})
+            self.assertEqual(sent[0]['params']['resources'][0]['entity'], 1)
+            feed.state = 'arrived'
+            deadline = time.monotonic() + 4
+            while len(sent) < 2 and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(sent[1]['params']['appStates'][1], {'appStateID': 2, 'entity': 0})
+        finally:
+            feedback.stop.set()
+            feedback.thread.join(2)

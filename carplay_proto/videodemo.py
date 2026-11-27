@@ -257,10 +257,26 @@ class UiCommands:
 REOPEN_RETRY_SECONDS=(1,3,6)
 
 
+def navigation_active(feed=None):
+    """Return a poll telling whether a navigation provider is guiding."""
+    if feed is None:
+        from .navigationproviders import ProviderNavigationFeed
+        feed=ProviderNavigationFeed()
+    def poll():
+        try:
+            snapshot=feed.poll()
+        except Exception:
+            return False
+        return bool(snapshot) and snapshot['navigation'].get('state')=='active'
+    return poll
+
+
 class ScreenFeedback:
     """Keep control requests away from the video producer's critical path."""
-    def __init__(self,client,commands=None,modes=None,resume=None,screen=None,resource_changed=None,audio=None,duck=None,mode_lock=None,mode_revision=None,reopen_audio=False):
+    def __init__(self,client,commands=None,modes=None,resume=None,screen=None,resource_changed=None,audio=None,duck=None,mode_lock=None,mode_revision=None,reopen_audio=False,navigating=None):
         self.client=client
+        self.navigating=navigating
+        self.navigation_at=0.0
         self.commands=commands
         self.modes=modes
         self.resume=resume
@@ -278,10 +294,25 @@ class ScreenFeedback:
         self.thread=threading.Thread(target=self.run,daemon=True)
         self.thread.start()
 
+    def announce_navigation(self,entity):
+        # An iPhone owns the turn-by-turn app state while it guides; a head
+        # unit may wait for that before it asks for route guidance updates.
+        with self.mode_lock:
+            state=next((s for s in self.modes['appStates'] if s['appStateID']==2),None)
+            if state is None or state['entity']==entity:return False
+            state['entity']=entity
+            self.mode_revision[0]+=1
+        print('Turn-by-turn app state entity={}'.format(entity),flush=True)
+        if self.resource_changed is not None:self.resource_changed.set()
+        return True
+
     def run(self):
         next_feedback=time.monotonic()+2
         while not self.stop.wait(0.1):
             try:
+                if self.navigating and self.modes and time.monotonic()>=self.navigation_at:
+                    self.navigation_at=time.monotonic()+1
+                    self.announce_navigation(1 if self.navigating() else 0)
                 returning=self.commands and self.commands.return_requested()
                 resuming=(self.resume is not None and self.resume.is_set()) or (self.commands and self.commands.resume.is_set())
                 changed=self.resource_changed is not None and self.resource_changed.is_set()
@@ -649,7 +680,8 @@ def run_demo(client,address,interface,shared,setup_info,info,path=None,seconds=1
                                 request_keyframe=pipeline.request_keyframe,packet_profile=packet_profile,
                                 resume_record=not marelli_carline(info))
             feedback=ScreenFeedback(client,commands,modes,resume,screen,resource_changed,audio,duck,mode_lock,mode_revision,
-                                    reopen_audio=marelli_carline(info))
+                                    reopen_audio=marelli_carline(info),
+                                    navigating=navigation_active() if marelli_carline(info) else None)
         if live:
             import itertools
             source = itertools.chain([first_live_frame],source)
