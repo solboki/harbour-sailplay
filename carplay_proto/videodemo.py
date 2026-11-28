@@ -351,6 +351,13 @@ class ScreenFeedback:
                 status,_,body=self.client.request('POST','/feedback',headers={'User-Agent':'AirPlay/566.25.21'})
                 next_feedback=time.monotonic()+2
                 print('Screen feedback status={} bytes={}'.format(status,len(body)),flush=True)
+                # DIAGNOSTIC: the receiver's own stream statistics, every 10 s.
+                self.feedback_count=getattr(self,'feedback_count',0)+1
+                if self.feedback_count%5==1 and body:
+                    try:
+                        print('Feedback detail={}'.format(plistlib.loads(body)),flush=True)
+                    except Exception as error:
+                        print('Feedback detail unreadable: {}'.format(type(error).__name__),flush=True)
             except Exception as error:
                 print('Screen feedback failed: {}: {}'.format(type(error).__name__,error),flush=True)
                 self.stop.set()
